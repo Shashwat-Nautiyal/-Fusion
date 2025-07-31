@@ -27,7 +27,7 @@ contract AtomicSwapEscrow {
         uint256 minSwapAmount;
         uint256 timelock; // UNIX timestamp
         address makerResolver;
-        address intentAnnouncer;
+        address maker;
         address taker; // optional, can be address(0)
         bool redeemed;
         bool refunded;
@@ -40,7 +40,7 @@ contract AtomicSwapEscrow {
     // Events
     event SrcEscrowCreated(
         bytes32 indexed secretHash,
-        address indexed intentAnnouncer,
+        address indexed maker,
         address indexed resolver,
         uint256 amount,
         uint256 minSwapAmount,
@@ -49,7 +49,7 @@ contract AtomicSwapEscrow {
 
     event DstEscrowCreated(
         bytes32 indexed secretHash,
-        address indexed intentAnnouncer,
+        address indexed maker,
         address indexed resolver,
         uint256 amount,
         uint256 minSwapAmount,
@@ -79,14 +79,14 @@ contract AtomicSwapEscrow {
      * @param amount Amount to lock (must equal msg.value)
      * @param minSwapAmount Minimum swap amount accepted by maker
      * @param timelock Unix timestamp after which refund allowed
-     * @param intentAnnouncer Address of user who wants to swap (intent announcer)
+     * @param maker Address of user who wants to swap (user with swap intent)
      */
     function createSrcEscrow(
         bytes32 secretHash,
         uint256 amount,
         uint256 minSwapAmount,
         uint256 timelock,
-        address intentAnnouncer
+        address maker
     ) external payable validHash(secretHash) {
         require(timelock > block.timestamp, E_INVALID_TIMELOCK);
         require(amount > 0, E_INVALID_AMOUNT);
@@ -100,13 +100,13 @@ contract AtomicSwapEscrow {
             minSwapAmount: minSwapAmount,
             timelock: timelock,
             makerResolver: msg.sender,
-            intentAnnouncer: intentAnnouncer,
+            maker: maker,
             taker: msg.sender,
             redeemed: false,
             refunded: false
         });
 
-        emit SrcEscrowCreated(secretHash, intentAnnouncer, msg.sender, amount, minSwapAmount, timelock);
+        emit SrcEscrowCreated(secretHash, maker, msg.sender, amount, minSwapAmount, timelock);
     }
 
     /**
@@ -115,14 +115,14 @@ contract AtomicSwapEscrow {
      * @param amount Amount to lock (must equal msg.value)
      * @param minSwapAmount Minimum swap amount accepted by maker
      * @param timelock Unix timestamp after which refund allowed
-     * @param intentAnnouncer Address of user who wants to swap (will receive funds)
+     * @param maker Address of user who wants to swap (will receive funds)
      */
     function createDstEscrow(
         bytes32 secretHash,
         uint256 amount,
         uint256 minSwapAmount,
         uint256 timelock,
-        address intentAnnouncer
+        address maker
     ) external payable validHash(secretHash) {
         require(timelock > block.timestamp, E_INVALID_TIMELOCK);
         require(amount > 0, E_INVALID_AMOUNT);
@@ -136,13 +136,13 @@ contract AtomicSwapEscrow {
             minSwapAmount: minSwapAmount,
             timelock: timelock,
             makerResolver: msg.sender,
-            intentAnnouncer: intentAnnouncer,
-            taker: intentAnnouncer,
+            maker: maker,
+            taker: maker,
             redeemed: false,
             refunded: false
         });
 
-        emit DstEscrowCreated(secretHash, intentAnnouncer, msg.sender, amount, minSwapAmount, timelock);
+        emit DstEscrowCreated(secretHash, maker, msg.sender, amount, minSwapAmount, timelock);
     }
 
     /**
@@ -163,7 +163,7 @@ contract AtomicSwapEscrow {
         escrow.redeemed = true;
 
         // Determine taker who receives funds
-        address taker = isSrc ? escrow.makerResolver : escrow.intentAnnouncer;
+        address taker = isSrc ? escrow.makerResolver : escrow.maker;
 
         // Transfer ETH to taker
         uint256 amount = escrow.amount;
@@ -192,7 +192,7 @@ contract AtomicSwapEscrow {
 
         escrow.refunded = true;
 
-        address taker = escrow.intentAnnouncer;
+        address taker = escrow.maker;
         uint256 amount = escrow.amount;
 
         delete srcEscrows[secretHash];
