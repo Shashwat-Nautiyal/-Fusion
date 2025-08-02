@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.23;
+pragma solidity ^0.8.23;
 
 import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -26,12 +26,12 @@ import "./OrderMixin.sol";
  * - Cancelation by order id
  * - Partial Fill (only once)
  *
- * See [OrderMixin](OrderMixin.md) for more details.
+ * See [OrderMixin](OrderMixin.md) for more details.`
  */
 contract LimitOrderProtocol is
     EIP712("1inch Limit Order Protocol", "4"),
     Ownable,
-    
+
     OrderMixin
 { //Pausable removed for simplicity, can be added back if needed
 
