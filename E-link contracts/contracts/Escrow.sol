@@ -5,7 +5,7 @@ import "../Interfaces/IERC20.sol";
 
 /**
  * @title Escrow
- * @dev Base contract now supports both native currency and ERC20 tokens.
+ * @dev Base contract supports both native currency and ERC20 tokens.
  */
 abstract contract Escrow {
     // --- State Variables ---
@@ -13,11 +13,7 @@ abstract contract Escrow {
     address public immutable maker;
     bytes32 public immutable secretHash;
     uint256 public immutable timeout;
-
-    // Address of the ERC20 token contract.
-    // address(0) signifies the native currency (e.g., ETH).
     IERC20 public immutable tokenContract;
-    // The amount of tokens being held in escrow.
     uint256 public immutable amount;
 
     // --- Events ---
@@ -33,9 +29,9 @@ abstract contract Escrow {
         address _tokenContract,
         uint256 _amount
     ) {
-        require(_timeout > block.timestamp, "Escrow: timeout not in future");
         require(_amount > 0, "Escrow: amount must be positive");
-
+        require(_timeout > block.timestamp, "Escrow: timeout must be in future");
+        
         taker = _taker;
         maker = _maker;
         secretHash = _secretHash;
@@ -45,7 +41,6 @@ abstract contract Escrow {
     }
 
     // --- Core Logic Functions ---
-
     /**
      * @dev Internal function to securely transfer the held funds to a recipient.
      */
@@ -64,15 +59,27 @@ abstract contract Escrow {
     function _withdraw(bytes32 secret) internal {
         require(block.timestamp <= timeout, "Escrow: timeout has passed");
         require(sha256(abi.encodePacked(secret)) == secretHash, "Escrow: invalid secret");
-
         _transferFunds(taker); // Transfer to the taker
         emit Withdrawn(secret);
     }
 
+    modifier timeoutPassed() {
+        require(block.timestamp > timeout, "Escrow: timeout has not passed");
+        _;
+    }
+
     function _cancel() internal {
         require(block.timestamp > timeout, "Escrow: timeout has not passed");
-
         _transferFunds(maker); // Transfer back to the maker
         emit Cancelled();
     }
+
+    function publicWithdraw(bytes32 secret) external timeoutPassed {
+        require(sha256(abi.encodePacked(secret)) == secretHash, "Escrow: invalid secret");
+        _transferFunds(taker);
+        emit Withdrawn(secret);
+    }
+
+    // Allow contract to receive native currency
+    receive() external payable {}
 }
