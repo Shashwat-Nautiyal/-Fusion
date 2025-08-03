@@ -1,70 +1,44 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./Escrow.sol";
 
-/// @notice Destination-chain escrow holding the resolver’s tokens + deposit.
-contract EscrowDst {
-    address public maker;
-    address public resolver;
-    IERC20 public token;
-    uint256 public amount;       // Resolver’s token amount
-    uint256 public deposit;      // Resolver’s safety deposit
-    bytes32 public secretHash;
-    uint256 public timelock;     // Expiration time
-    bool public funded;
-    bool public completed;
-
+/**
+ * @title EscrowDst
+ * @dev Destination chain escrow contract for cross-chain atomic swaps
+ * 
+ * Flow:
+ * 1. Resolver (maker) deposits tokens + safety deposit
+ * 2. User (taker) can withdraw tokens by revealing the same secret
+ * 3. If timeout passes, anyone can cancel and refund to resolver
+ * 
+ * Token flow: Resolver -> User
+ */
+contract EscrowDst is Escrow {
     constructor(
-        address _maker,
-        address _resolver,
-        IERC20 _token,
-        uint256 _amount,
-        uint256 _deposit,
-        bytes32 _secretHash,
-        uint256 _timelock
-    ) {
-        maker = _maker;
-        resolver = _resolver;
-        token = _token;
-        amount = _amount;
-        deposit = _deposit;
-        secretHash = _secretHash;
-        timelock = _timelock;
+        address _taker,      // user address
+        address _maker,      // resolver address
+        bytes32 _secretHash, // same secret hash as SrcEscrow
+        uint256 _timeout,
+        address _tokenContract,
+        uint256 _amount,     // amount of ERC20 tokens (or ETH if tokenContract == 0)
+        uint256 _safetyDeposit // safety deposit in native ETH
+    ) Escrow(_taker, _maker, _secretHash, _timeout, _tokenContract, _amount, _safetyDeposit) {}
+
+    /**
+     * @dev User withdraws resolver's tokens by revealing secret
+     * Only user (taker) can call this before timeout
+     */
+    function withdraw(bytes32 secret) external {
+        require(msg.sender == taker, "EscrowDst: caller is not the user");
+        _withdraw(secret);
     }
 
-    /// @notice Resolver funds the destination escrow.
-    function fund() external payable {
-        require(msg.sender == resolver, "Only resolver");
-        require(!funded, "Already funded");
-        require(msg.value == deposit, "Wrong deposit");
-        require(token.transferFrom(resolver, address(this), amount), "Token transfer failed");
-        funded = true;
-    }
-
-    /// @notice Resolver uses secret to send tokens to maker (before timelock).
-    function unlock(bytes calldata secret) external {
-        require(!completed, "Already completed");
-        require(msg.sender == resolver, "Only resolver");
-        require(funded, "Not funded");
-        require(block.timestamp < timelock, "Timelock passed");
-        require(keccak256(secret) == secretHash, "Invalid secret");
-        // Send resolver's tokens to maker
-        token.transfer(maker, amount);
-        // Return safety deposit to resolver
-        payable(resolver).transfer(deposit);
-        completed = true;
-    }
-
-    /// @notice After timelock, anyone can refund (resolver reclaims funds).
-    function refund() external {
-        require(!completed, "Already completed");
-        require(funded, "Not funded");
-        require(block.timestamp >= timelock, "Too early to refund");
-        // Return resolver's tokens to resolver
-        token.transfer(resolver, amount);
-        // Return deposit to resolver
-        payable(resolver).transfer(deposit);
-        completed = true;
+    /**
+     * @dev Cancel escrow and refund to resolver after timeout
+     * Anyone can call this after timeout
+     */
+    function publicCancel() external {
+        _cancel();
     }
 }

@@ -1,76 +1,44 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./Escrow.sol";
 
-/// @notice Source-chain escrow holding the maker’s tokens + resolver’s deposit.
-contract EscrowSrc {
-    address public maker;
-    address public resolver;
-    IERC20 public token;
-    uint256 public amount;       // Maker’s token amount
-    uint256 public deposit;      // Resolver’s safety deposit (in native currency)
-    bytes32 public secretHash;
-    uint256 public timelock;     // Expiration time (Unix timestamp)
-    bool public funded;
-    bool public completed;
-
+/**
+ * @title EscrowSrc
+ * @dev Source chain escrow contract for cross-chain atomic swaps
+ * 
+ * Flow:
+ * 1. User (maker) deposits tokens + safety deposit
+ * 2. Resolver (taker) can withdraw tokens by revealing secret
+ * 3. If timeout passes, anyone can cancel and refund to user
+ * 
+ * Token flow: User -> Resolver
+ */
+contract EscrowSrc is Escrow {
     constructor(
-        address _maker,
-        address _resolver,
-        IERC20 _token,
-        uint256 _amount,
-        uint256 _deposit,
+        address _taker,      // resolver address
+        address _maker,      // user address  
         bytes32 _secretHash,
-        uint256 _timelock
-    ) {
-        maker = _maker;
-        resolver = _resolver;
-        token = _token;
-        amount = _amount;
-        deposit = _deposit;
-        secretHash = _secretHash;
-        timelock = _timelock;
+        uint256 _timeout,
+        address _tokenContract,
+        uint256 _amount,     // amount of ERC20 tokens (or ETH if tokenContract == 0)
+        uint256 _safetyDeposit // safety deposit in native ETH
+    ) Escrow(_taker, _maker, _secretHash, _timeout, _tokenContract, _amount, _safetyDeposit) {}
+
+    /**
+     * @dev Resolver withdraws user's tokens by revealing secret
+     * Only resolver (taker) can call this before timeout
+     */
+    function withdraw(bytes32 secret) external {
+        require(msg.sender == taker, "EscrowSrc: caller is not the resolver");
+        _withdraw(secret);
     }
 
-    /// @notice Resolver funds the escrow: transfers maker’s tokens in and sends deposit.
-    function fund() external payable {
-        require(msg.sender == resolver, "Only resolver");
-        require(!funded, "Already funded");
-        require(msg.value == deposit, "Wrong deposit");
-        require(token.transferFrom(maker, address(this), amount), "Token transfer failed");
-        funded = true;
-    }
-
-    /// @notice Resolver reveals secret to claim maker’s tokens (before timelock).
-    function unlock(bytes calldata secret) external {
-        require(!completed, "Already completed");
-        require(msg.sender == resolver, "Only resolver");
-        require(funded, "Not funded");
-        require(block.timestamp < timelock, "Timelock passed");
-        require(keccak256(secret) == secretHash, "Invalid secret");
-        // Send maker's tokens to resolver
-        token.transfer(resolver, amount);
-        // Return safety deposit to resolver
-        payable(resolver).transfer(deposit);
-        completed = true;
-    }
-
-    /// @notice After timelock, anyone can refund: return tokens to maker, slash deposit.
-    function refund() external {
-        require(!completed, "Already completed");
-        require(funded, "Not funded");
-        require(block.timestamp >= timelock, "Too early to refund");
-        // Return maker's tokens to maker
-        token.transfer(maker, amount);
-        // Safety deposit goes to caller (executor) or to maker if resolver calls
-        if (msg.sender == resolver) {
-            // If resolver triggers cancel, deposit to maker as penalty
-            payable(maker).transfer(deposit);
-        } else {
-            // Otherwise, caller (likely maker or third-party) gets deposit
-            payable(msg.sender).transfer(deposit);
-        }
-        completed = true;
+    /**
+     * @dev Cancel escrow and refund to user after timeout
+     * Anyone can call this after timeout
+     */
+    function publicCancel() external {
+        _cancel();
     }
 }
