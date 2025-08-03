@@ -146,7 +146,7 @@ forge build
 pnpm test
 
 # Run specific test
-forge test --match-contract CrossChainSwapTest -vvv
+forge test -vvv
 ```
 
 ## 📊 Contract Architecture
@@ -276,4 +276,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Discussions**: [Join community discussions](https://github.com/Shashwat-Nautiyal/-Fusion/discussions)
 
 ⭐ **Star this repository if you find it useful!** ⭐
+
 
