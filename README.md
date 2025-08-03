@@ -2,7 +2,7 @@
 
 > 🔗 **Trustless atomic swaps between Base Sepolia and Etherlink testnets**
 
-[![Solidity](https://img.shields.io/badge/Solidityttps://imgt](https://img.shields.io/badge/TypeScript-007ACC?logorview
+[![Solidity](https://img.shields.io/badge/Solidityttps://imgt](https://img.shields.io/badge/TypeScript-007ACC?logorview)
 
 **Fusion+** is a cutting-edge **proof-of-concept** blockchain application that enables **atomic, trustless token swaps** between different blockchain networks without relying on centralized bridges or intermediaries. Currently supporting **Base Sepolia** and **Etherlink** testnets, this project demonstrates how cryptographic primitives can solve one of DeFi's biggest challenges: secure cross-chain asset transfers.
 
